@@ -9,7 +9,7 @@ import java.util.concurrent.*;
 
 public class IdcDm {
     final static int CHUNK_SIZE = 1024 * 4; // 4KB.
-    final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000 * 10; // 10MB.
+    final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000 * 5; // 5MB.
 
     public static void main(String[] args) {
         // Read inputs, decide on number of connections.
@@ -184,6 +184,27 @@ public class IdcDm {
 
         for (int i = 0; i < n; i++) {
             int rangeEnd = rangeStart + (chunksPerWorker * CHUNK_SIZE) - 1;
+
+            // Since we may have downloaded some data already for this
+            // worker range, we want to trim the bytes range to a more
+            // bounded range.
+            int boundedRangeStart = rangeStart;
+            int bitMapStartIdx = rangeStart / CHUNK_SIZE;
+            int boundedChunksAmount = chunksPerWorker;
+
+            for (int j = bitMapStartIdx; j < bitMapStartIdx + chunksPerWorker; j++) {
+                if (bitMap[j]) {
+                    // We don't want to include this chunk in the range. Increment the
+                    // bounded range and decrease the amount of chunks for this worker.
+                    boundedRangeStart += CHUNK_SIZE;
+                    boundedChunksAmount--;
+                } else {
+                    break;
+                }
+            }
+
+            // The last chunk of the last worker is more likely to be less then the fixed
+            // chunk size. Adjust the bytes range accordingly.
             boolean isLastWorker = i == n - 1;
             if (isLastWorker) {
                 chunksPerWorker = totalFileChunks - (i * chunksPerWorker);
@@ -194,8 +215,8 @@ public class IdcDm {
             String workerUrl = urls.get(i % urls.size());
 
             ConnectionWorker cw = new ConnectionWorker(i,
-                    workerUrl, rangeStart, rangeEnd, bitMap, bq,
-                    isLastWorker, chunksPerWorker, n);
+                    workerUrl, boundedRangeStart, rangeEnd, bitMap, bq,
+                    isLastWorker, boundedChunksAmount);
 
             workers[i] = cw;
             rangeStart = rangeEnd + 1;

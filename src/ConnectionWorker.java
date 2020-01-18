@@ -12,11 +12,10 @@ public class ConnectionWorker implements Runnable {
     private HttpURLConnection conn;
     private boolean includesLastChunk;
     private int chunksAmount;
-    private int numOfWorkers;
 
     final private static int CHUNK_SIZE = 1024 * 4; // 4kb
 
-    ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap, BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount, int numOfWorkers) {
+    ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap, BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount) {
         this.id = id;
         this.queue = bq;
         this.rangeStart = rangeStart;
@@ -24,7 +23,6 @@ public class ConnectionWorker implements Runnable {
         this.bitmap = bitmap;
         this.includesLastChunk = isLast;
         this.chunksAmount = chunksAmount;
-        this.numOfWorkers = numOfWorkers;
 
         try {
             this.url = new URL(url);
@@ -54,9 +52,8 @@ public class ConnectionWorker implements Runnable {
     }
 
     private void download() {
-        String msg = "[%d] Start downloading range (%d - %d) from:";
-        System.out.println(String.format(msg, this.id, this.rangeStart, this.rangeEnd));
-        System.out.println(this.url.toString());
+        String msg = "[%d] Start downloading range (%d - %d) from:\n%s";
+        System.out.println(String.format(msg, this.id, this.rangeStart, this.rangeEnd, this.url.toString()));
 
         int fileOffset = 0;
         InputStream in = null;
@@ -67,7 +64,7 @@ public class ConnectionWorker implements Runnable {
             int readUpTo = CHUNK_SIZE;
             in = this.conn.getInputStream();
 
-            int startIdx = this.id * (this.bitmap.length / this.numOfWorkers);
+            int startIdx = this.rangeStart / CHUNK_SIZE;
             int endIdx = startIdx + this.chunksAmount;
 
             for (int i = startIdx; i < endIdx; i++) {
