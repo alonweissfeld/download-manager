@@ -12,10 +12,15 @@ public class ConnectionWorker implements Runnable {
     private HttpURLConnection conn;
     private boolean includesLastChunk;
     private int chunksAmount;
+    private IdcDm downloadManager;
 
     final private static int CHUNK_SIZE = 1024 * 4; // 4kb
+    final private static int READ_TIMEOUT_MS = 1000 * 15; // 15 seconds
+    final private static int CONNECT_TIMEOUT_MS = 1000 * 10; // 10 seconds
 
-    ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap, BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount) {
+    ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap,
+                     BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount,
+                     IdcDm downloadManager) {
         this.id = id;
         this.queue = bq;
         this.rangeStart = rangeStart;
@@ -23,6 +28,7 @@ public class ConnectionWorker implements Runnable {
         this.bitmap = bitmap;
         this.includesLastChunk = isLast;
         this.chunksAmount = chunksAmount;
+        this.downloadManager = downloadManager;
 
         try {
             this.url = new URL(url);
@@ -41,13 +47,15 @@ public class ConnectionWorker implements Runnable {
             // Set Bytes range.
             String range = String.format("Bytes=%d-%d", this.rangeStart, this.rangeEnd);
             this.conn.setRequestProperty("Range", range);
+            this.conn.setConnectTimeout(CONNECT_TIMEOUT_MS);
+            this.conn.setReadTimeout(READ_TIMEOUT_MS);
             this.conn.connect();
 
             // Download data
             this.download();
 
         } catch (Exception err) {
-            System.err.println(err.toString());
+            this.downloadManager.kill(err);
         }
     }
 
@@ -107,19 +115,21 @@ public class ConnectionWorker implements Runnable {
 
             // We finished downloading for this thread.
             System.out.println(String.format("[%d] Finished downloading", this.id));
-
         } catch (Exception err) {
-            System.err.println(err.toString());
+            // We don't want to propagate this error.
+            // Let this thread die and have it's creator decide the status.
+            this.downloadManager.kill(err);
         } finally {
             // Invoking the close() methods on the InputStream
             // of an URLConnection after a request may free network
-            //resources associated with this instance.
+            // resources associated with this instance.
             try {
-                in.close();
+                if (in != null) {
+                    in.close();
+                }
             } catch (IOException err) {
-                System.err.println("Cannot close URL input stream.");
+               System.err.println(err.toString());
             }
         }
     }
-
 }

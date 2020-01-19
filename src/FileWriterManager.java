@@ -8,19 +8,21 @@ public class FileWriterManager {
     private Metadata metadata;      // Associated Metadata file.
     private RandomAccessFile file;
     private int fileChunksAmount;
+    private IdcDm downloadManager;
 
     final private static String TEMP_SUFFIX = ".tmp";
 
-    FileWriterManager(String path, int contentLength, int chunkSize) {
+    FileWriterManager(String path, int contentLength, int chunkSize, IdcDm downloadManager) throws Exception {
         this.path = path;
         this.chunkSize = chunkSize;
         this.contentLength = contentLength;
+        this.downloadManager = downloadManager;
         this.fileChunksAmount = calcChunksNum(contentLength);
 
         try {
             this.file = new RandomAccessFile(path, "rw");
         } catch (FileNotFoundException err) {
-            System.err.println("Could not create file " + path);
+            throw new Exception("Could not create file " + path);
         }
 
         // Set the Metadata object to this FileWriterManager.
@@ -41,6 +43,8 @@ public class FileWriterManager {
                 return metadata;
             }
 
+        // If we can't deseriazlie the metadata, don't kill program,
+        // and start from the beginning (i.e. create a new Metadata object).
         } catch (IOException err) {
             System.err.println("Could not deserialize the metadata object.");
         } catch (ClassNotFoundException err) {
@@ -107,6 +111,7 @@ public class FileWriterManager {
         try {
             this.file.close();
         } catch (IOException err) {
+            // TODO: throw error?
             System.err.println("Could not close file: " + err.toString());
         }
     }
@@ -133,11 +138,19 @@ public class FileWriterManager {
     /**
      * Deletes the associated metadata file.
      */
-    public void cleanUp() {
+    public void cleanUp() throws Exception {
         String p = this.path + TEMP_SUFFIX;
         File file = new File(p);
         if (!file.delete()) {
-            System.err.println("Couldn't delete Metadata file: " + p);
+            throw new Exception("Couldn't delete Metadata file: " + p);
         }
+    }
+
+    /**
+     * Terminate and propagate the error to parent Download Manager.
+     * @param e - given error that is responsible for termination.
+     */
+    public void kill(Exception e) {
+        this.downloadManager.kill(e);
     }
 }

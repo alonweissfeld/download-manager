@@ -1,6 +1,5 @@
 import java.io.IOException;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 public class FileWriterWorker implements Runnable {
     private FileWriterManager fileManager;  // Associated FileWriterManager
@@ -16,19 +15,26 @@ public class FileWriterWorker implements Runnable {
     public void run() {
         for (int i = 0; i < this.chunksAmount; i++) {
             try {
-                // After 2 minutes of not getting any data (which is just
-                // a single chunk of ~4kb) then we can timeout.
-                DataChunk dataChunk = this.bq.poll(3, TimeUnit.MINUTES);
+                // After 1 minute of not getting any data, then we can timeout.
+                DataChunk dataChunk = this.bq.poll(1, TimeUnit.MINUTES);
                 if (dataChunk == null) {
-                    throw new Error("Waited too long for a single chunk.");
+                    this.kill(new Exception("Waited too long for a single chunk."));
+                    return;
                 }
 
                 this.fileManager.write(dataChunk);
-            } catch (InterruptedException | IOException err) {
-                err.printStackTrace();
-                throw new Error("FileWriterWorker failed to write data.");
+            } catch (IOException err) {
+                this.kill(new Exception("FileWriterWorker failed to write data."));
+                return;
+            } catch (InterruptedException e) {
+                // If we got an interrupt, that means that this thread has been
+                // interrupted by a different thread asking it to close.
+                return;
             }
-
         }
+    }
+
+    private void kill(Exception e) {
+        this.fileManager.kill(e);
     }
 }

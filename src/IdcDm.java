@@ -1,4 +1,3 @@
-import javax.rmi.ssl.SslRMIClientSocketFactory;
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -8,6 +7,10 @@ import java.util.concurrent.*;
 
 
 public class IdcDm {
+    private String urlPath;
+    private int connectionsAmount;
+    private ExecutorService threadPool;
+
     final static int CHUNK_SIZE = 1024 * 4; // 4KB.
     final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000 * 5; // 5MB.
 
@@ -19,41 +22,45 @@ public class IdcDm {
             return;
         }
 
-        String urlsArg = args[0];
-        int connectionsNum = (args.length > 1) ? Integer.parseInt(args[1]) : 1;
+        String urlPath = args[0];
+        int connectionsAmount = (args.length > 1) ? Integer.parseInt(args[1]) : 1;
+
+        IdcDm downloadManager = new IdcDm(urlPath, connectionsAmount);
 
         try {
-            download(urlsArg, connectionsNum);
+            downloadManager.download();
+            System.out.println("Download succeeded.");
         } catch (Exception err) {
-            System.err.println(err.toString());
-            System.err.println("Download failed.");
-            return;
+            downloadManager.kill(err);
         }
-
-        System.out.println("Download succeeded.");
     }
 
-    public static void download(String urlList, int connectionsNum) throws InterruptedException, IOException {
-        List<String> urls = getUrls(urlList);
+    IdcDm(String path, int n) {
+        this.urlPath = path;
+        this.connectionsAmount = n;
+    }
+
+    public void download() throws Exception {
+        List<String> urls = getUrls(this.urlPath);
         long contentLength = getFileContentLength(urls.get(0));
 
         if (contentLength <= 0) {
-            throw new Error("File's Content-Length is zero or unknown. Aborting.");
+            throw new Exception("File's Content-Length is zero or unknown. Aborting.");
         }
 
         // Limit number of concurrent connections to download the file.
-        connectionsNum = limitNumberOfConnections(contentLength, connectionsNum);
+        int connectionsNum = limitNumberOfConnections(contentLength, this.connectionsAmount);
         String msg = (connectionsNum > 1) ? "Downloading using %d connections..." : "Downloading...";
         System.out.println(String.format(msg, connectionsNum));
 
         // Create a FileWriterManager that manages writing the data to disk and updating
         // the relevant metadata in order to support pause and resume while downloading.
-        FileWriterManager fileWriter = new FileWriterManager(getPath(urls.get(0)), (int) contentLength, CHUNK_SIZE);
+        FileWriterManager fileWriter = new FileWriterManager(getPath(urls.get(0)), (int) contentLength, CHUNK_SIZE, this);
 
         //
         BlockingQueue<DataChunk> bq = new ArrayBlockingQueue<DataChunk>(1000);
-        ExecutorService threadPool = Executors.newFixedThreadPool(connectionsNum);
-        ConnectionWorker[] connectionWorkers = divideWorkers(urls, connectionsNum, fileWriter, bq);
+        ExecutorService threadPool = Executors.newFixedThreadPool(connectionsNum + 1);
+        ConnectionWorker[] connectionWorkers = this.divideWorkers(urls, fileWriter, bq);
         for (ConnectionWorker cw : connectionWorkers) {
             threadPool.execute(cw);
         }
@@ -61,16 +68,13 @@ public class IdcDm {
         // Create a single FileWriterWorker thread that is responsible to fetch chunks of data
         // from the shared Blocking Queue.
         Thread fileWorkerThread = fileWriter.createWorkerThread(bq);
+        threadPool.execute(fileWorkerThread);
+
+        // Set the thread pool on this Download Manager instance.
+        this.setThreadPool(threadPool);
 
         threadPool.shutdown();
-        try {
-            fileWorkerThread.run();
-        } catch (Exception e) {
-            System.out.println("GOT ERR. " + e.toString());
-        }
-
-        awaitTermination(threadPool);
-        fileWorkerThread.join();
+        this.awaitTermination(2, TimeUnit.DAYS);
 
         // We have finished downloading. clean up the metadata file.
         fileWriter.cleanUp();
@@ -82,12 +86,12 @@ public class IdcDm {
      * @param str
      * @return
      */
-    private static List<String> getUrls(String str) {
+    private static List<String> getUrls(String str) throws Exception {
         File file = new File(str);
         List<String> result = new ArrayList<String>();
 
         if (file.isDirectory()) {
-            throw new Error("Given url is a directory.");
+            throw new Exception("Given url is a directory.");
         }
 
         if (!file.exists()) {
@@ -106,7 +110,7 @@ public class IdcDm {
                     line = reader.readLine();
                 }
             } catch (IOException e) {
-                throw new Error("Can't read urls file.");
+                throw new Exception("Can't read urls file.");
             }
         }
 
@@ -149,13 +153,14 @@ public class IdcDm {
 
     /**
      * A helper method to await termination for a given thread pool.
-     * @param pool - the given ExecutorService thread pool.
+     * @param time - time number
+     * @param unit - TimeUnit
      */
-    private static void awaitTermination(ExecutorService pool) {
+    private void awaitTermination(int time, TimeUnit unit) {
         try {
-            pool.awaitTermination(2, TimeUnit.DAYS);
+            this.threadPool.awaitTermination(time, unit);
         } catch (InterruptedException err) {
-            pool.shutdownNow();
+            this.threadPool.shutdownNow();
             Thread.currentThread().interrupt();
         }
     }
@@ -164,7 +169,6 @@ public class IdcDm {
      * Given 'n' number of connections, divide the range of a file we wish to download
      * to different http byte ranges and create for each range a ConnectionWorker.
      * @param urls - linked list of url string, in case we use multiple servers.
-     * @param n - number of desired connections to use.
      * @param fileWriter - the associated FileWriterManager, which manages the writing
      *                   operation to disk and handles any related metadata.
      * @param bq - given mutual blocking queue that is used as the pipe between a ConnectionWorker,
@@ -172,7 +176,8 @@ public class IdcDm {
      *           and write the data to disk.
      * @return - returns an array of Connection Workers.
      */
-    private static ConnectionWorker[] divideWorkers(List<String> urls, int n, FileWriterManager fileWriter, BlockingQueue<DataChunk> bq) {
+    private ConnectionWorker[] divideWorkers(List<String> urls, FileWriterManager fileWriter, BlockingQueue<DataChunk> bq) {
+        int n = this.connectionsAmount;
         ConnectionWorker[] workers = new ConnectionWorker[n];
 
         boolean[] bitMap = fileWriter.getBitMap();
@@ -216,7 +221,7 @@ public class IdcDm {
 
             ConnectionWorker cw = new ConnectionWorker(i,
                     workerUrl, boundedRangeStart, rangeEnd, bitMap, bq,
-                    isLastWorker, boundedChunksAmount);
+                    isLastWorker, boundedChunksAmount, this);
 
             workers[i] = cw;
             rangeStart = rangeEnd + 1;
@@ -245,6 +250,26 @@ public class IdcDm {
         System.out.println("Optimizing connections number to " + res);
 
         return res;
+    }
+
+    private void setThreadPool(ExecutorService pool) {
+        this.threadPool = pool;
+    }
+
+    /**
+     * Shutdown running processes and let the user know that the download have failed.
+     * @param e - any information why the download have failed.
+     */
+    public void kill(Exception e) {
+        if (this.threadPool != null) {
+            this.threadPool.shutdownNow();
+        }
+
+        System.err.println(e.getMessage());
+        System.err.println("Download failed.");
+
+        // Tasks may ignore the interrupts created by shutDownNow.
+        System.exit(1);
     }
 
 }
