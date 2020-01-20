@@ -13,10 +13,12 @@ public class FileWriterWorker implements Runnable {
     }
 
     public void run() {
+        int left = this.fileManager.getChunksToFetchAmount();
+
         for (int i = 0; i < this.chunksAmount; i++) {
             try {
                 // After 1 minute of not getting any data, then we can timeout.
-                DataChunk dataChunk = this.bq.poll(1, TimeUnit.MINUTES);
+                DataChunk dataChunk = this.bq.poll(2, TimeUnit.MINUTES);
                 if (dataChunk == null) {
                     this.kill(new Exception("Waited too long for a single chunk."));
                     return;

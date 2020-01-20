@@ -125,6 +125,10 @@ public class FileWriterManager {
         return this.fileChunksAmount;
     }
 
+    public int getChunksToFetchAmount() {
+        return this.metadata.getChunksToFetch();
+    }
+
     public int getContentLength() {
         return this.contentLength;
     }

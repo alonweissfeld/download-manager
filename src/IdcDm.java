@@ -12,7 +12,7 @@ public class IdcDm {
     private ExecutorService threadPool;
 
     final static int CHUNK_SIZE = 1024 * 4; // 4KB.
-    final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000 * 5; // 5MB.
+    final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000; // 1MB.
 
     public static void main(String[] args) {
         // Read inputs, decide on number of connections.
@@ -183,7 +183,7 @@ public class IdcDm {
         boolean[] bitMap = fileWriter.getBitMap();
         int contentLength = fileWriter.getContentLength();
         int totalFileChunks = fileWriter.getFileChunksAmount();
-
+        
         int rangeStart = 0;
         int chunksPerWorker = fileWriter.getFileChunksAmount() / n;
 
@@ -197,6 +197,14 @@ public class IdcDm {
             int bitMapStartIdx = rangeStart / CHUNK_SIZE;
             int boundedChunksAmount = chunksPerWorker;
 
+            // The last chunk of the last worker is more likely to be less then the fixed
+            // chunk size. Adjust the bytes range accordingly.
+            boolean isLastWorker = i == n - 1;
+            if (isLastWorker) {
+                boundedChunksAmount = totalFileChunks - (i * chunksPerWorker);
+                rangeEnd = (int) contentLength - 1;
+            }
+
             for (int j = bitMapStartIdx; j < bitMapStartIdx + chunksPerWorker; j++) {
                 if (bitMap[j]) {
                     // We don't want to include this chunk in the range. Increment the
@@ -206,14 +214,6 @@ public class IdcDm {
                 } else {
                     break;
                 }
-            }
-
-            // The last chunk of the last worker is more likely to be less then the fixed
-            // chunk size. Adjust the bytes range accordingly.
-            boolean isLastWorker = i == n - 1;
-            if (isLastWorker) {
-                chunksPerWorker = totalFileChunks - (i * chunksPerWorker);
-                rangeEnd = (int) contentLength - 1;
             }
 
             // Assign each worker a url respectively to url list.
