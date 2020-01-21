@@ -1,0 +1,9 @@
+# Custom attributes of its containing folder
+.DS_Store
+
+# IntelligJ XML's
+.idea/
+
+# Build and output foldes
+.build
+.out
