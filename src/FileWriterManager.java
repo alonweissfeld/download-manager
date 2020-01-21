@@ -1,4 +1,5 @@
 import java.io.*;
+import java.nio.file.Files;
 import java.util.concurrent.BlockingQueue;
 
 public class FileWriterManager {
@@ -94,13 +95,13 @@ public class FileWriterManager {
         // Rename the temporary metadata file.
         File tempMetadata = new File(this.path + TEMP_SUFFIX + "1"); // old name
         File realMetadata = new File(this.path + TEMP_SUFFIX); // new name
-        if (tempMetadata.renameTo(realMetadata)) {
-            // After successful procedure the correct metadata file is updated
-            // and we can print the status to the user.
-            int currentPercentage = this.metadata.getCurrentPercentage();
-            if (currentPercentage > previousPercentage) {
-                System.out.println("Downloaded " + currentPercentage + "%");
-            }
+
+        Files.move(tempMetadata.toPath(), realMetadata.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+        // After successful procedure the correct metadata file is updated
+        // and we can print the status to the user.
+        int currentPercentage = this.metadata.getCurrentPercentage();
+        if (currentPercentage > previousPercentage) {
+            System.out.println("Downloaded " + currentPercentage + "%");
         }
     }
 
