@@ -5,5 +5,8 @@
 .idea/
 
 # Build and output foldes
-.build
-.out
+build/
+out/
+
+# Temp download files
+*.tmp

@@ -183,7 +183,7 @@ public class IdcDm {
         boolean[] bitMap = fileWriter.getBitMap();
         int contentLength = fileWriter.getContentLength();
         int totalFileChunks = fileWriter.getFileChunksAmount();
-        
+
         int rangeStart = 0;
         int chunksPerWorker = fileWriter.getFileChunksAmount() / n;
 
