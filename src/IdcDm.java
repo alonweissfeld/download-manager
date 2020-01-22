@@ -74,7 +74,8 @@ public class IdcDm {
         this.setThreadPool(threadPool);
 
         threadPool.shutdown();
-        this.awaitTermination(2, TimeUnit.DAYS);
+        // We assume that this program wouldn't download a file longer then a single day
+        this.awaitTermination(1, TimeUnit.DAYS);
 
         // We have finished downloading. clean up the metadata file.
         fileWriter.cleanUp();
@@ -258,9 +259,10 @@ public class IdcDm {
 
     /**
      * Shutdown running processes and let the user know that the download have failed.
+     * The first exception that raise this method - ends the program.
      * @param e - any information why the download have failed.
      */
-    public void kill(Exception e) {
+    public synchronized void kill(Exception e) {
         if (this.threadPool != null) {
             this.threadPool.shutdownNow();
         }

@@ -1,4 +1,6 @@
-
+/**
+ *
+ */
 public class Metadata implements java.io.Serializable {
     private int length;
     private int chunksSoFar;

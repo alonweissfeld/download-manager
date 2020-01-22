@@ -15,8 +15,8 @@ public class ConnectionWorker implements Runnable {
     private IdcDm downloadManager;
 
     final private static int CHUNK_SIZE = 1024 * 4; // 4kb
-    final private static int READ_TIMEOUT_MS = 1000 * 15; // 15 seconds
-    final private static int CONNECT_TIMEOUT_MS = 1000 * 10; // 10 seconds
+    final private static int READ_TIMEOUT_MS = 1000 * 4; // 20 seconds
+    final private static int CONNECT_TIMEOUT_MS = 1000 * 25; // 25 seconds
 
     ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap,
                      BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount,
@@ -116,8 +116,7 @@ public class ConnectionWorker implements Runnable {
             // We finished downloading for this thread.
             System.out.println(String.format("[%d] Finished downloading", this.id));
         } catch (Exception err) {
-            // We don't want to propagate this error.
-            // Let this thread die and have it's creator decide the status.
+            // Propagate the error to the creator of this thread.
             this.downloadManager.kill(err);
         } finally {
             // Invoking the close() methods on the InputStream
@@ -128,6 +127,9 @@ public class ConnectionWorker implements Runnable {
                     in.close();
                 }
             } catch (IOException err) {
+                // If we're trying to close this input stream, we have
+                // finished downloading with this thread. Therefore, don't propagate
+                // this error, but print this information to the screen.
                System.err.println(err.toString());
             }
         }
