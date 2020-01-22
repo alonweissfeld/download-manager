@@ -4,10 +4,13 @@ import java.nio.file.StandardCopyOption;
 import java.util.concurrent.BlockingQueue;
 
 /**
- * This class is responsible for handling any writing to a given file
- * path. It associates a Metadata object, and polling thread (which polls data
- * from an external resource, e.g., an internet connection input stream) and writes
- * the data to disk.
+ * This class is responsible for handling any writing of data to a given file
+ * path. It associates a Metadata object, and creates a FileWriterWorker polling thread
+ * (which polls data from an external resource, an internet connection input stream in our
+ * case) and writes the data to disk. In addition, this class manages the updating of
+ * the Metadata object accordingly on every successful chunk writing (to the file),
+ * so we can keep track of the work done so far, in case we want to recover from
+ * an error, to avoid re-downloading from the beginning.
  */
 public class FileWriterManager {
     private String path;            // Path to save file

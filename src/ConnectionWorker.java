@@ -2,6 +2,17 @@ import java.io.*;
 import java.net.*;
 import java.util.concurrent.*;
 
+/**
+ * This class is a Runnable thread that is responsible to download a specific byte
+ * range of a file from a given url.
+ * It uses a Blocking Queue, to pass any downloaded data forward for the services
+ * that are responsible to write this data to the actual file.
+ * It downloads the range from the internet by chunks, that is, each iteration we
+ * call read() we fill up a complete chunk array of bytes. The size of the array
+ * is determined by the chunkSize, and the number of times we expect to read
+ * data was previously calculated by it's creator and is actually the number
+ * of chunks that fit in the byte range for this thread.
+ */
 public class ConnectionWorker implements Runnable {
     private int id;
     private URL url;
@@ -20,6 +31,18 @@ public class ConnectionWorker implements Runnable {
     final private static int READ_TIMEOUT_MS = 1000 * 4; // 20 seconds
     final private static int CONNECT_TIMEOUT_MS = 1000 * 25; // 25 seconds
 
+    /**
+     * Constructor for this class.
+     * @param id - id of the thread, in relation to other Connection Workers.
+     * @param url - the given url to download from.
+     * @param rangeStart - the bytes range start.
+     * @param rangeEnd - the bytes range end.
+     * @param bitmap - the associated bitmap array.
+     * @param bq - the associated Blocking Queue to pass any read() data forward.
+     * @param isLast - indicates if this worker is responsible for the last range in the file.
+     * @param chunksAmount - determines how many chunks this thread needs to download.
+     * @param downloadManager - the creator of this thread.
+     */
     ConnectionWorker(int id, String url, int rangeStart, int rangeEnd, boolean[] bitmap,
                      BlockingQueue<DataChunk> bq, boolean isLast, int chunksAmount,
                      IdcDm downloadManager) {
@@ -36,7 +59,7 @@ public class ConnectionWorker implements Runnable {
         try {
             this.url = new URL(url);
         } catch (MalformedURLException err) {
-            System.err.println("Bad URL. " + err.toString());
+            this.downloadManager.kill(err);
         }
 
     }
@@ -49,6 +72,11 @@ public class ConnectionWorker implements Runnable {
         this.chunkSize = size;
     }
 
+    /**
+     * The run method for this Runnable.
+     * It creates a connection to the specified url, and downloads the
+     * relevant byte range from the internet.
+     */
     @Override
     public void run() {
         try {
@@ -70,6 +98,13 @@ public class ConnectionWorker implements Runnable {
         }
     }
 
+    /**
+     * Downloads the relevant byte range and pass this data on
+     * to services who are responsible to write it to disk, by putting
+     * this data in a mutual Blocking Queue. It knows how many data
+     * is expected to be read according to the amount of data chunks that
+     * are fit in the byte range.
+     */
     private void download() {
         String msg = "[%d] Start downloading range (%d - %d) from:\n%s";
         System.out.println(String.format(msg, this.id, this.rangeStart, this.rangeEnd, this.url.toString()));

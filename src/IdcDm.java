@@ -1,3 +1,8 @@
+/**
+ * Alon Weissfeld, 307941310
+ * Matan Hazan, 203529136
+ */
+
 import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -5,7 +10,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.*;
 
-
+/**
+ * Main class for the Download Manager.
+ * This program downloads a file from the internet, by a given
+ * url or by a given path to multiple urls. Also, it can use
+ * different number of connections if the user wish to use it.
+ * On top of that, we initialize an instance of this class in order
+ * to pass information (mainly error handling) between the readers
+ * and writers of the data.
+ */
 public class IdcDm {
     private String urlPath;
     private int connectionsAmount;
@@ -43,11 +56,25 @@ public class IdcDm {
         }
     }
 
+    /**
+     * Constructor for this class.
+     * @param path - given path to download url. Could be a path
+     *             to a file in the system if it contains multiple urls.
+     * @param n - number of connections the user wish to user.
+     */
     IdcDm(String path, int n) {
         this.urlPath = path;
         this.connectionsAmount = n;
     }
 
+    /**
+     * Downloads the desired file from the internet.
+     * It initiates a FileWriterManager, which is responsible to
+     * handle any writing of the data to the file, and update any
+     * metadata accordingly. With that, it creates connection workers
+     * threads to download different byte ranges of the file simultaneously.
+     * @throws Exception
+     */
     public void download() throws Exception {
         List<String> urls = getUrls(this.urlPath);
         long contentLength = getFileContentLength(urls.get(0));
