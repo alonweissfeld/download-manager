@@ -11,7 +11,15 @@ public class IdcDm {
     private int connectionsAmount;
     private ExecutorService threadPool;
 
-    final static int CHUNK_SIZE = 1024 * 4; // 4KB.
+    // Sets the constants used throughout the program.
+    // Using 64kb per chunk seems like a good choice when
+    // taking memory page size into consideration.
+    // For the minimum bytes per connection, we want to give
+    // an upper bound on how many connections are used. If the
+    // user wants to download a 2MB file, it doesn't make sense to open
+    // many connections. Therefore, we initialize a minimum size
+    // for each connection.
+    final static int CHUNK_SIZE = 1024 * 64; // 64KB.
     final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000; // 1MB.
 
     public static void main(String[] args) {
@@ -224,6 +232,7 @@ public class IdcDm {
                     workerUrl, boundedRangeStart, rangeEnd, bitMap, bq,
                     isLastWorker, boundedChunksAmount, this);
 
+            cw.setChunkSize(CHUNK_SIZE);
             workers[i] = cw;
             rangeStart = rangeEnd + 1;
         }

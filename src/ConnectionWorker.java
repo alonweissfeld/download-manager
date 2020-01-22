@@ -13,8 +13,10 @@ public class ConnectionWorker implements Runnable {
     private boolean includesLastChunk;
     private int chunksAmount;
     private IdcDm downloadManager;
+    private int chunkSize;
 
-    final private static int CHUNK_SIZE = 1024 * 4; // 4kb
+    // Sets the default constants.
+    final private static int CHUNK_SIZE = 1024 * 64; // 64kb
     final private static int READ_TIMEOUT_MS = 1000 * 4; // 20 seconds
     final private static int CONNECT_TIMEOUT_MS = 1000 * 25; // 25 seconds
 
@@ -29,6 +31,7 @@ public class ConnectionWorker implements Runnable {
         this.includesLastChunk = isLast;
         this.chunksAmount = chunksAmount;
         this.downloadManager = downloadManager;
+        this.chunkSize = CHUNK_SIZE;
 
         try {
             this.url = new URL(url);
@@ -36,6 +39,14 @@ public class ConnectionWorker implements Runnable {
             System.err.println("Bad URL. " + err.toString());
         }
 
+    }
+
+    /**
+     * Sets the chunk size according to the given size.
+     * @param size - given size in bytes.
+     */
+    public void setChunkSize(int size) {
+        this.chunkSize = size;
     }
 
     @Override
@@ -69,17 +80,17 @@ public class ConnectionWorker implements Runnable {
         try {
             int len;
             int offset;
-            int readUpTo = CHUNK_SIZE;
+            int readUpTo = this.chunkSize;
             in = this.conn.getInputStream();
 
-            int startIdx = this.rangeStart / CHUNK_SIZE;
+            int startIdx = this.rangeStart / this.chunkSize;
             int endIdx = startIdx + this.chunksAmount;
 
             for (int i = startIdx; i < endIdx; i++) {
                 len = 0; // the total number of bytes read into the buffer (current chunk)
                 offset = 0;
                 fileOffset = readUpTo * i;
-                byte[] chunk = new byte[CHUNK_SIZE]; // allocate a chunk buffer.
+                byte[] chunk = new byte[this.chunkSize]; // allocate a chunk buffer.
 
                 if (this.includesLastChunk && i == (endIdx - 1)) {
                     // This iteration will fetch the final chunk.
@@ -93,7 +104,7 @@ public class ConnectionWorker implements Runnable {
                     // of bytes. We'll try to skip the whole chunk, but the skip method may,
                     // for a variety of reasons, end up skipping over some smaller number
                     // of bytes and therefore we need to make sure we've skipped the desired bytes.
-                    while (offset < CHUNK_SIZE) {
+                    while (offset < this.chunkSize) {
                         len = (int) in.skip(readUpTo);
                         offset += len;
                     }
