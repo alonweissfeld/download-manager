@@ -126,7 +126,14 @@ public class FileWriterManager {
         File tempMetadata = new File(this.path + TEMP_SUFFIX + "1"); // old name
         File realMetadata = new File(this.path + TEMP_SUFFIX); // new name
 
-        Files.move(tempMetadata.toPath(), realMetadata.toPath(), StandardCopyOption.ATOMIC_MOVE);
+        // We may preform continuous renaming operations, as every new chunk is updated
+        // to the disk metadata. Therefore, if the operating system failed to make
+        // this atomic renaming for a single chunk, don't kill the program -
+        // ignore it and continue.
+        try {
+            Files.move(tempMetadata.toPath(), realMetadata.toPath(), StandardCopyOption.ATOMIC_MOVE);
+        } catch (IOException ignored) {}
+
         // After successful procedure the correct metadata file is updated
         // and we can print the status to the user.
         int currentPercentage = this.metadata.getCurrentPercentage();

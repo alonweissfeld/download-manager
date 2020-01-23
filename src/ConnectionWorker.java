@@ -28,7 +28,7 @@ public class ConnectionWorker implements Runnable {
 
     // Sets the default constants.
     final private static int CHUNK_SIZE = 1024 * 64; // 64kb
-    final private static int READ_TIMEOUT_MS = 1000 * 4; // 20 seconds
+    final private static int READ_TIMEOUT_MS = 1000 * 20; // 20 seconds
     final private static int CONNECT_TIMEOUT_MS = 1000 * 25; // 25 seconds
 
     /**
@@ -79,7 +79,15 @@ public class ConnectionWorker implements Runnable {
      */
     @Override
     public void run() {
+        if (this.rangeStart >= this.rangeEnd) {
+            System.out.println(String.format("[%d] Finished. This range was already covered.", this.id));
+            return;
+        }
+
         try {
+            String msg = "[%d] Start downloading range (%d - %d) from:\n%s";
+            System.out.println(String.format(msg, this.id, this.rangeStart, this.rangeEnd, this.url.toString()));
+
             this.conn = (HttpURLConnection) this.url.openConnection();
             this.conn.setRequestMethod("GET");
 
@@ -93,6 +101,8 @@ public class ConnectionWorker implements Runnable {
             // Download data
             this.download();
 
+            // We finished downloading for this thread.
+            System.out.println(String.format("[%d] Finished downloading", this.id));
         } catch (Exception err) {
             this.downloadManager.kill(err);
         }
@@ -106,9 +116,6 @@ public class ConnectionWorker implements Runnable {
      * are fit in the byte range.
      */
     private void download() {
-        String msg = "[%d] Start downloading range (%d - %d) from:\n%s";
-        System.out.println(String.format(msg, this.id, this.rangeStart, this.rangeEnd, this.url.toString()));
-
         int fileOffset = 0;
         InputStream in = null;
 
@@ -158,9 +165,6 @@ public class ConnectionWorker implements Runnable {
                 DataChunk dataChunk = new DataChunk(chunk, fileOffset, i);
                 this.queue.put(dataChunk);
             }
-
-            // We finished downloading for this thread.
-            System.out.println(String.format("[%d] Finished downloading", this.id));
         } catch (Exception err) {
             // Propagate the error to the creator of this thread.
             this.downloadManager.kill(err);
