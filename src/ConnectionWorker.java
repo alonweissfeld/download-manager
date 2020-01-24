@@ -79,6 +79,12 @@ public class ConnectionWorker implements Runnable {
      */
     @Override
     public void run() {
+        // Defensive check to avoid reading a redundant byte range.
+        // In the case where the download have been paused (for any reason), and the number of
+        // connections have been increased (on resume), we may have a situation where this
+        // range have been covered already. The program intends to update the start range of the
+        // thread for bytes already read, so we simply make sure that we didn't actually
+        // read all this range already.
         if (this.rangeStart >= this.rangeEnd) {
             System.out.println(String.format("[%d] Finished. This range was already covered.", this.id));
             return;

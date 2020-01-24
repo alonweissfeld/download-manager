@@ -230,8 +230,9 @@ public class IdcDm {
             int rangeEnd = rangeStart + (chunksPerWorker * CHUNK_SIZE) - 1;
 
             // Since we may have downloaded some data already for this
-            // worker range, we want to trim the bytes range to a more
-            // bounded range.
+            // worker range (on pause and resume), we want to trim the bytes
+            // range to a more bounded range avoiding reading data that was
+            // already read.
             int boundedRangeStart = rangeStart;
             int bitMapStartIdx = rangeStart / CHUNK_SIZE;
             int boundedChunksAmount = chunksPerWorker;
@@ -244,6 +245,7 @@ public class IdcDm {
                 rangeEnd = (int) contentLength - 1;
             }
 
+            // As explained above, update the start range to the exact relevant value.
             for (int j = bitMapStartIdx; j < bitMapStartIdx + chunksPerWorker; j++) {
                 if (bitMap[j]) {
                     // We don't want to include this chunk in the range. Increment the
@@ -255,7 +257,7 @@ public class IdcDm {
                 }
             }
 
-            // Assign each worker a url respectively to url list.
+            // Assign each worker a url respectively to the url list.
             String workerUrl = urls.get(i % urls.size());
 
             ConnectionWorker cw = new ConnectionWorker(i,
