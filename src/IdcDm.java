@@ -25,15 +25,18 @@ public class IdcDm {
     private ExecutorService threadPool;
 
     // Sets the constants used throughout the program.
-    // Using 64kb per chunk seems like a good choice when
-    // taking memory page size into consideration.
-    // For the minimum bytes per connection, we want to give
-    // an upper bound on how many connections are used. If the
-    // user wants to download a 2MB file, it doesn't make sense to open
-    // many connections. Therefore, we initialize a minimum size
+    // Using 64kb per chunk seems like a good considering memory usage.
+    // For the minimum bytes per connection, we want to give an upper bound on how
+    // many connections are used. If the user wants to download a 2MB file, it doesn't
+    // make sense to open many connections. Therefore, we initialize a minimum size
     // for each connection.
+    // Finally, the queue capacity sets the maximum number of elements that can be hold
+    // for our consumers and producers data blocking queue. Since we are polling data from
+    // the queue immediately when it's available, there is no sense in leaving them in the
+    // queue. Therefore, this is just an arbitrary defensive integer.
     final static int CHUNK_SIZE = 1024 * 64; // 64KB.
     final static int MINIMUM_BYTES_PER_CONNECTION = 1024 * 1000; // 1MB.
+    final static int QUEUE_CAPACITY = 1000;
 
     public static void main(String[] args) {
         // Read inputs, decide on number of connections.
@@ -92,8 +95,8 @@ public class IdcDm {
         // the relevant metadata in order to support pause and resume while downloading.
         FileWriterManager fileWriter = new FileWriterManager(getPath(urls.get(0)), (int) contentLength, CHUNK_SIZE, this);
 
-        //
-        BlockingQueue<DataChunk> bq = new ArrayBlockingQueue<DataChunk>(1000);
+        // Create a fixed-sized array that holds elements inserted by producers and extracted by consumers.
+        BlockingQueue<DataChunk> bq = new ArrayBlockingQueue<DataChunk>(QUEUE_CAPACITY);
         ExecutorService threadPool = Executors.newFixedThreadPool(connectionsNum + 1);
         ConnectionWorker[] connectionWorkers = this.divideWorkers(urls, fileWriter, bq);
         for (ConnectionWorker cw : connectionWorkers) {
